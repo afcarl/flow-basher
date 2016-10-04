@@ -1,0 +1,12 @@
+version: "2"
+
+services:
+  bot:
+    build: .
+    volumes:
+      - .:/src
+      - /home/basher/.config:/root/.config
+    environment:
+      - SEMAPHOR_BASHER_USERNAME
+      - SEMAPHOR_BASHER_PASSWORD
+      - SEMAPHOR_SPARKLEPALACE_INVITE_CODE
