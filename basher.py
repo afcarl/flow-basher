@@ -6,7 +6,14 @@ import string
 from IPython import embed
 import time
 from subprocess import Popen, PIPE
+import logging
 
+log = logging.getLogger(__name__)
+logging.basicConfig()
+log.setLevel(logging.DEBUG)
+
+flowlogger = logging.getLogger("flow")
+flowlogger.setLevel(logging.DEBUG)
 
 """
 the permission model is like this: any account can request to join an
@@ -19,29 +26,25 @@ def get_or_create_account(bot):
     """Check if account is installed."""
     flow = Flow()
 
-    print("* Checking if account is already installed...")
+    log.info("Checking if account is already installed...")
     try:
-        flow.start_up(
-            username=bot['username'],
-        )
-        print("* Account already installed.")
-    except Flow.FlowError as e:
-        print(e)
-        print("* Account not installed, trying local device creation...")
+        flow.start_up(username=bot['username'])
+        log.info("Account already installed.")
+    except Flow.FlowError:
+        log.warn("Account not installed, trying local device creation...")
         try:
             flow.create_device(username=bot['username'],
                                password=bot['password']
                                )
             time.sleep(2)
-            print("* Account has been installed locally.")
+            log.info("Account has been installed locally.")
         except Flow.FlowError as e:
-            print(e)
-            print("* Account does not exist, creating account...")
+            log.warn("Account does not exist, creating account...")
 
             try:
                 flow.create_account(*bot)
-            except Exception as e:
-                print(e)
+            except Exception:
+                log.exception("unexpected error in get_or_create_account")
 
     flow = Flow(bot["username"])
     return flow
@@ -66,7 +69,7 @@ for org in orgs:
 
 
 def exec_cmd(cmd):
-    print("received command: {}".format(cmd))
+    log.debug("received command: {}".format(cmd))
     cmd = cmd.split()
     ret = {}
     try:
@@ -76,19 +79,18 @@ def exec_cmd(cmd):
         ret['output'] = output
         ret['err'] = err
         ret['rc'] = rc
-    except OSError as e:
-        print(e)
-        ret['err'] = e
     except Exception as e:
-        print(e)
-        embed()
+        log.exception("exec_cmd")
+        ret = dict(output=str(e), err=str(e), rc=-1)
     return ret
 
 
 @flow.message
 def check_message(notif_type, data):
+    log.debug("entering check_mesage")
     regular_messages = data["regularMessages"]
     for message in regular_messages:
+        log.info("Processing message: {}".format(message))
         msg = message["text"]
         cid = message["channelId"]
         channel = flow.get_channel(cid)
@@ -96,12 +98,14 @@ def check_message(notif_type, data):
 
         # Parse the message
         if not is_it_for_me(flow.account_id(), is_dm(channel), message):
+            log.debug("message isn't for me; ignoring.")
             continue
         cmd = msg
         result = exec_cmd(cmd)
         for k in result:
             if result[k]:
                 flow.send_message(oid, cid, "{}: \r{}".format(k, result[k]))
+    log.debug("leaving check_mesage")
 
 
 def is_dm(channel):
